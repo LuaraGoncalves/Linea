@@ -1,5 +1,6 @@
 const TOKEN_KEY = 'agenda-online-token'
 const USER_KEY = 'agenda-online-user'
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 export function getSavedSession() {
   const token = localStorage.getItem(TOKEN_KEY)
@@ -90,7 +91,7 @@ async function request(url, options = {}) {
   let response
 
   try {
-    response = await fetch(url, {
+    response = await fetch(`${API_BASE_URL}${url}`, {
       method: options.method ?? 'GET',
       headers,
       body: options.body ? JSON.stringify(options.body) : undefined
