@@ -1,0 +1,28 @@
+@Agenda.API_HostAddress = http://localhost:5047
+
+POST {{Agenda.API_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Maria Agenda",
+  "email": "maria@agenda.local",
+  "password": "123456"
+}
+
+###
+
+POST {{Agenda.API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "teste@agenda.local",
+  "password": "123456"
+}
+
+###
+
+GET {{Agenda.API_HostAddress}}/api/notes
+Accept: application/json
+Authorization: Bearer COLE_O_TOKEN_AQUI
+
+###
