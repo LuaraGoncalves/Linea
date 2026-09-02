@@ -3,12 +3,17 @@ using Agenda.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?? [];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AgendaWeb", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173", "http://localhost:4173")
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
