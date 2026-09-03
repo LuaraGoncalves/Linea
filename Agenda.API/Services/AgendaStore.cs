@@ -586,9 +586,14 @@ public sealed class AgendaStore
             return "Informe um e-mail valido.";
         }
 
-        if (password.Length < 6 || password.Length > 80)
+        if (password.Length < 5 || password.Length > 80)
         {
-            return "A senha deve ter entre 6 e 80 caracteres.";
+            return "A senha deve ter entre 5 e 80 caracteres.";
+        }
+
+        if (!password.Any(char.IsUpper) || !password.Any(char.IsLower) || !password.Any(char.IsDigit))
+        {
+            return "A senha precisa ter pelo menos uma letra maiuscula, uma letra minuscula e um numero.";
         }
 
         return null;

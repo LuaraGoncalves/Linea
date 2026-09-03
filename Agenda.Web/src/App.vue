@@ -88,13 +88,31 @@ const upcomingNotes = computed(() => {
   })
 })
 
+const passwordValidationMessage = computed(() => {
+  if (authMode.value !== 'register') {
+    return ''
+  }
+
+  return validatePassword(authForm.password)
+})
+
 if (session.value) {
   loadNotes()
 }
 
 async function submitAuth() {
-  loading.value = true
   message.value = ''
+
+  if (authMode.value === 'register') {
+    const passwordMessage = validatePassword(authForm.password)
+
+    if (passwordMessage) {
+      message.value = passwordMessage
+      return
+    }
+  }
+
+  loading.value = true
 
   try {
     const payload =
@@ -443,6 +461,30 @@ function normalizeNoteDate(date) {
 
   return String(date).slice(0, 10)
 }
+
+function validatePassword(password) {
+  if (!password) {
+    return 'A senha precisa ter pelo menos 5 caracteres, uma letra maiúscula, uma letra minúscula e um número.'
+  }
+
+  if (password.length < 5) {
+    return 'A senha precisa ter pelo menos 5 caracteres.'
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    return 'A senha precisa ter pelo menos uma letra maiúscula.'
+  }
+
+  if (!/[a-z]/.test(password)) {
+    return 'A senha precisa ter pelo menos uma letra minúscula.'
+  }
+
+  if (!/\d/.test(password)) {
+    return 'A senha precisa ter pelo menos um número.'
+  }
+
+  return ''
+}
 </script>
 
 <template>
@@ -475,7 +517,15 @@ function normalizeNoteDate(date) {
 
           <label>
             Senha
-            <input v-model="authForm.password" autocomplete="current-password" maxlength="80" minlength="6" required type="password" />
+            <input
+              v-model="authForm.password"
+              :autocomplete="authMode === 'register' ? 'new-password' : 'current-password'"
+              maxlength="80"
+              minlength="5"
+              required
+              type="password"
+            />
+            <span v-if="passwordValidationMessage" class="field-hint">{{ passwordValidationMessage }}</span>
           </label>
 
           <p v-if="message" class="message" role="alert">{{ message }}</p>

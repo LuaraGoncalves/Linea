@@ -165,6 +165,13 @@ label {
   font-weight: 800;
 }
 
+.field-hint {
+  color: #8c2f23;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 input,
 select,
 textarea {
