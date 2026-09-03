@@ -41,7 +41,8 @@ export async function register(payload) {
 export async function login(payload) {
   return request('/api/auth/login', {
     method: 'POST',
-    body: payload
+    body: payload,
+    unauthorizedMessage: 'E-mail ou senha invalidos. Confira os dados ou crie uma conta.'
   })
 }
 
@@ -109,7 +110,7 @@ async function request(url, options = {}) {
   if (!response.ok) {
     if (response.status === 401) {
       clearSession()
-      throw new Error('Sua sessao expirou. Entre novamente.')
+      throw new Error(options.unauthorizedMessage ?? 'Sua sessao expirou. Entre novamente.')
     }
 
     throw new Error(data?.message ?? 'Algo deu errado. Tente novamente.')
