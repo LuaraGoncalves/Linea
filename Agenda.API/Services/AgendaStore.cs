@@ -10,6 +10,7 @@ namespace Agenda.API.Services;
 public sealed class AgendaStore
 {
     private readonly NoteService _notes;
+    private readonly NoteRepository _noteRepository;
     private readonly UserRepository _userRepository;
     private readonly UserService _users;
     private readonly string? _connectionString;
@@ -26,11 +27,13 @@ public sealed class AgendaStore
         IWebHostEnvironment environment,
         UserService users,
         NoteService notes,
+        NoteRepository noteRepository,
         UserRepository userRepository
     )
     {
         _users = users;
         _notes = notes;
+        _noteRepository = noteRepository;
         _userRepository = userRepository;
         _connectionString = ResolveConnectionString(configuration);
 
@@ -172,7 +175,7 @@ public sealed class AgendaStore
             {
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
-                return await GetNotesFromDatabaseAsync(connection, userId);
+                return await _noteRepository.GetByUserAsync(connection, userId);
             }
 
             var data = await LoadAsync();
@@ -207,7 +210,7 @@ public sealed class AgendaStore
             {
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
-                await InsertNoteAsync(connection, note);
+                await _noteRepository.InsertAsync(connection, note);
                 return (true, "Anotacao criada.", note);
             }
 
@@ -238,7 +241,18 @@ public sealed class AgendaStore
             {
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
-                var updated = await UpdateNoteInDatabaseAsync(connection, userId, id, request);
+                var updated = await _noteRepository.UpdateAsync(
+                    connection,
+                    userId,
+                    id,
+                    _notes.CleanTitle(request.Title),
+                    _notes.CleanBody(request.Body),
+                    request.NoteDate,
+                    request.NoteTime,
+                    _notes.CleanColor(request.Color),
+                    request.IsCompleted,
+                    DateTimeOffset.UtcNow
+                );
                 return updated is null
                     ? (false, "Anotacao nao encontrada.", null)
                     : (true, "Anotacao atualizada.", updated);
@@ -273,13 +287,7 @@ public sealed class AgendaStore
             {
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
-                await using var command = new NpgsqlCommand(
-                    "delete from notes where id = @id and user_id = @user_id",
-                    connection
-                );
-                command.Parameters.AddWithValue("id", id);
-                command.Parameters.AddWithValue("user_id", userId);
-                return await command.ExecuteNonQueryAsync() > 0;
+                return await _noteRepository.DeleteAsync(connection, userId, id);
             }
 
             var data = await LoadAsync();
@@ -347,111 +355,6 @@ public sealed class AgendaStore
 
         await command.ExecuteNonQueryAsync();
         _schemaReady = true;
-    }
-
-    private static async Task<List<AgendaNote>> GetNotesFromDatabaseAsync(NpgsqlConnection connection, Guid userId)
-    {
-        await using var command = new NpgsqlCommand(
-            """
-            select id, user_id, title, body, note_date, note_time, color, is_completed, created_at, updated_at
-            from notes
-            where user_id = @user_id
-            order by note_date nulls last, note_time nulls last, updated_at desc
-            """,
-            connection
-        );
-        command.Parameters.AddWithValue("user_id", userId);
-
-        var notes = new List<AgendaNote>();
-        await using var reader = await command.ExecuteReaderAsync();
-
-        while (await reader.ReadAsync())
-        {
-            notes.Add(ReadNote(reader));
-        }
-
-        return notes;
-    }
-
-    private static async Task InsertNoteAsync(NpgsqlConnection connection, AgendaNote note)
-    {
-        await using var command = new NpgsqlCommand(
-            """
-            insert into notes (id, user_id, title, body, note_date, note_time, color, is_completed, created_at, updated_at)
-            values (@id, @user_id, @title, @body, @note_date, @note_time, @color, @is_completed, @created_at, @updated_at)
-            """,
-            connection
-        );
-
-        AddNoteParameters(command, note);
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private async Task<AgendaNote?> UpdateNoteInDatabaseAsync(
-        NpgsqlConnection connection,
-        Guid userId,
-        Guid id,
-        NoteRequest request
-    )
-    {
-        await using var command = new NpgsqlCommand(
-            """
-            update notes
-            set title = @title,
-                body = @body,
-                note_date = @note_date,
-                note_time = @note_time,
-                color = @color,
-                is_completed = @is_completed,
-                updated_at = @updated_at
-            where id = @id and user_id = @user_id
-            returning id, user_id, title, body, note_date, note_time, color, is_completed, created_at, updated_at
-            """,
-            connection
-        );
-
-        command.Parameters.AddWithValue("id", id);
-        command.Parameters.AddWithValue("user_id", userId);
-        command.Parameters.AddWithValue("title", _notes.CleanTitle(request.Title));
-        command.Parameters.AddWithValue("body", _notes.CleanBody(request.Body));
-        command.Parameters.AddWithValue("note_date", (object?)request.NoteDate ?? DBNull.Value);
-        command.Parameters.AddWithValue("note_time", (object?)request.NoteTime ?? DBNull.Value);
-        command.Parameters.AddWithValue("color", _notes.CleanColor(request.Color));
-        command.Parameters.AddWithValue("is_completed", request.IsCompleted);
-        command.Parameters.AddWithValue("updated_at", DateTimeOffset.UtcNow);
-
-        await using var reader = await command.ExecuteReaderAsync();
-        return await reader.ReadAsync() ? ReadNote(reader) : null;
-    }
-
-    private static void AddNoteParameters(NpgsqlCommand command, AgendaNote note)
-    {
-        command.Parameters.AddWithValue("id", note.Id);
-        command.Parameters.AddWithValue("user_id", note.UserId);
-        command.Parameters.AddWithValue("title", note.Title);
-        command.Parameters.AddWithValue("body", note.Body);
-        command.Parameters.AddWithValue("note_date", (object?)note.NoteDate ?? DBNull.Value);
-        command.Parameters.AddWithValue("note_time", (object?)note.NoteTime ?? DBNull.Value);
-        command.Parameters.AddWithValue("color", note.Color);
-        command.Parameters.AddWithValue("is_completed", note.IsCompleted);
-        command.Parameters.AddWithValue("created_at", note.CreatedAt);
-        command.Parameters.AddWithValue("updated_at", note.UpdatedAt);
-    }
-
-    private static AgendaNote ReadNote(NpgsqlDataReader reader)
-    {
-        return new AgendaNote(
-            reader.GetGuid(0),
-            reader.GetGuid(1),
-            reader.GetString(2),
-            reader.GetString(3),
-            reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4),
-            reader.IsDBNull(5) ? null : reader.GetFieldValue<TimeOnly>(5),
-            reader.GetString(6),
-            reader.GetBoolean(7),
-            reader.GetFieldValue<DateTimeOffset>(8),
-            reader.GetFieldValue<DateTimeOffset>(9)
-        );
     }
 
     private async Task<AgendaData> LoadAsync()

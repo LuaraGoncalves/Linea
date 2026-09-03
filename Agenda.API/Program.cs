@@ -25,6 +25,7 @@ builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddSingleton<UserService>();
 builder.Services.AddSingleton<NoteService>();
 builder.Services.AddSingleton<UserRepository>();
+builder.Services.AddSingleton<NoteRepository>();
 builder.Services.AddSingleton<TokenService>();
 
 var app = builder.Build();
