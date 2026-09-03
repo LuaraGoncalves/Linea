@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Mail;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Agenda.API.Contracts;
 using Agenda.API.Models;
@@ -11,6 +10,7 @@ namespace Agenda.API.Services;
 public sealed class AgendaStore
 {
     private static readonly string[] AllowedColors = ["paper", "rose", "sage", "blue"];
+    private readonly PasswordService _passwords;
     private readonly string? _connectionString;
     private readonly string _filePath;
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -20,8 +20,9 @@ public sealed class AgendaStore
     };
     private bool _schemaReady;
 
-    public AgendaStore(IConfiguration configuration, IWebHostEnvironment environment)
+    public AgendaStore(IConfiguration configuration, IWebHostEnvironment environment, PasswordService passwords)
     {
+        _passwords = passwords;
         _connectionString = ResolveConnectionString(configuration);
 
         var dataFolder = Path.Combine(environment.ContentRootPath, "App_Data");
@@ -143,11 +144,7 @@ public sealed class AgendaStore
                 return null;
             }
 
-            var hash = HashPassword(password, user.PasswordSalt);
-            return CryptographicOperations.FixedTimeEquals(
-                Convert.FromBase64String(hash),
-                Convert.FromBase64String(user.PasswordHash)
-            )
+            return _passwords.Verify(password, user.PasswordSalt, user.PasswordHash)
                 ? user
                 : null;
         }
@@ -542,34 +539,21 @@ public sealed class AgendaStore
         await JsonSerializer.SerializeAsync(stream, data, _jsonOptions);
     }
 
-    private static UserAccount CreateUser(string name, string email, string password)
+    private UserAccount CreateUser(string name, string email, string password)
     {
-        var salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+        var salt = _passwords.CreateSalt();
 
         return new UserAccount(
             Guid.NewGuid(),
             name.Trim(),
             email,
             salt,
-            HashPassword(password, salt),
+            _passwords.Hash(password, salt),
             DateTimeOffset.UtcNow
         );
     }
 
-    private static string HashPassword(string password, string salt)
-    {
-        var hash = Rfc2898DeriveBytes.Pbkdf2(
-            password,
-            Convert.FromBase64String(salt),
-            100_000,
-            HashAlgorithmName.SHA256,
-            32
-        );
-
-        return Convert.ToBase64String(hash);
-    }
-
-    private static string? ValidateUserInput(string name, string email, string password)
+    private string? ValidateUserInput(string name, string email, string password)
     {
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
@@ -586,17 +570,7 @@ public sealed class AgendaStore
             return "Informe um e-mail valido.";
         }
 
-        if (password.Length < 5 || password.Length > 80)
-        {
-            return "A senha deve ter entre 5 e 80 caracteres.";
-        }
-
-        if (!password.Any(char.IsUpper) || !password.Any(char.IsLower) || !password.Any(char.IsDigit))
-        {
-            return "A senha precisa ter pelo menos uma letra maiuscula, uma letra minuscula e um numero.";
-        }
-
-        return null;
+        return _passwords.Validate(password);
     }
 
     private static string? ValidateNote(NoteRequest request)
