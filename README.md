@@ -32,7 +32,7 @@ Quando a API roda em modo de desenvolvimento, ela cria automaticamente este usu�
 
 ```text
 E-mail: teste@agenda.local
-Senha: 123456
+Senha: Teste1
 ```
 
 Esse login é apenas para teste local. Em produção, o usuário deve criar uma conta pelo próprio site.
