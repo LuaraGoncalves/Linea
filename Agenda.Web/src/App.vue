@@ -277,7 +277,7 @@ function formatDate(date) {
     <section v-if="!session" class="auth-board">
       <div class="auth-paper">
         <p class="date-stamp">{{ new Date().toLocaleDateString('pt-BR') }}</p>
-        <h1>Agenda Online</h1>
+        <h1>Linea</h1>
         <p class="subtitle">Seu caderno particular para compromissos, ideias e lembretes.</p>
 
         <div class="mode-switch" aria-label="Escolha o modo de acesso">
@@ -318,7 +318,7 @@ function formatDate(date) {
     <section v-else class="desk">
       <header class="topbar">
         <div class="topbar-identity">
-          <span>Agenda Online</span>
+          <span>Linea</span>
           <strong>{{ session.user.name }}</strong>
         </div>
 
