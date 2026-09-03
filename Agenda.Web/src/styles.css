@@ -20,10 +20,17 @@
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: light;
+  background: #efe3cd;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  color: var(--ink);
+  background: #efe3cd;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -1121,6 +1128,8 @@ textarea:focus {
     grid-template-columns: 1fr;
     height: auto;
     min-height: auto;
+    background: transparent;
+    box-shadow: none;
   }
 
   .notebook::before {

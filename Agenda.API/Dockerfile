@@ -11,6 +11,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
 ENV ASPNETCORE_URLS=http://0.0.0.0:10000
+ENV DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE=false
 EXPOSE 10000
 
 COPY --from=build /app/publish .
