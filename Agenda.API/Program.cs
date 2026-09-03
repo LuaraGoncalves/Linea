@@ -1,3 +1,4 @@
+using Agenda.API.Data;
 using Agenda.API.Endpoints;
 using Agenda.API.Services;
 
@@ -20,6 +21,10 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddSingleton<AgendaStore>();
+builder.Services.AddSingleton<PasswordService>();
+builder.Services.AddSingleton<UserService>();
+builder.Services.AddSingleton<NoteService>();
+builder.Services.AddSingleton<UserRepository>();
 builder.Services.AddSingleton<TokenService>();
 
 var app = builder.Build();

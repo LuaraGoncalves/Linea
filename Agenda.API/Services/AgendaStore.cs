@@ -1,8 +1,7 @@
 using System.Net;
-using System.Net.Mail;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Agenda.API.Contracts;
+using Agenda.API.Data;
 using Agenda.API.Models;
 using Npgsql;
 
@@ -10,7 +9,9 @@ namespace Agenda.API.Services;
 
 public sealed class AgendaStore
 {
-    private static readonly string[] AllowedColors = ["paper", "rose", "sage", "blue"];
+    private readonly NoteService _notes;
+    private readonly UserRepository _userRepository;
+    private readonly UserService _users;
     private readonly string? _connectionString;
     private readonly string _filePath;
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -20,8 +21,17 @@ public sealed class AgendaStore
     };
     private bool _schemaReady;
 
-    public AgendaStore(IConfiguration configuration, IWebHostEnvironment environment)
+    public AgendaStore(
+        IConfiguration configuration,
+        IWebHostEnvironment environment,
+        UserService users,
+        NoteService notes,
+        UserRepository userRepository
+    )
     {
+        _users = users;
+        _notes = notes;
+        _userRepository = userRepository;
         _connectionString = ResolveConnectionString(configuration);
 
         var dataFolder = Path.Combine(environment.ContentRootPath, "App_Data");
@@ -31,7 +41,7 @@ public sealed class AgendaStore
 
     public async Task<(bool Success, string Message, UserAccount? User)> CreateUserAsync(string name, string email, string password)
     {
-        var validationMessage = ValidateUserInput(name, email, password);
+        var validationMessage = _users.ValidateRegistration(name, email, password);
 
         if (validationMessage is not null)
         {
@@ -41,20 +51,20 @@ public sealed class AgendaStore
         await _lock.WaitAsync();
         try
         {
-            var normalizedEmail = NormalizeEmail(email);
+            var normalizedEmail = _users.NormalizeEmail(email);
 
             if (UsesDatabase)
             {
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
 
-                if (await UserExistsAsync(connection, normalizedEmail))
+                if (await _userRepository.ExistsAsync(connection, normalizedEmail))
                 {
                     return (false, "Este e-mail ja foi cadastrado.", null);
                 }
 
-                var user = CreateUser(name, normalizedEmail, password);
-                await InsertUserAsync(connection, user);
+                var user = _users.CreateUser(name, normalizedEmail, password);
+                await _userRepository.InsertAsync(connection, user);
                 return (true, "Conta criada.", user);
             }
 
@@ -65,7 +75,7 @@ public sealed class AgendaStore
                 return (false, "Este e-mail ja foi cadastrado.", null);
             }
 
-            var localUser = CreateUser(name, normalizedEmail, password);
+            var localUser = _users.CreateUser(name, normalizedEmail, password);
             data.Users.Add(localUser);
             await SaveAsync(data);
 
@@ -82,16 +92,16 @@ public sealed class AgendaStore
         await _lock.WaitAsync();
         try
         {
-            var normalizedEmail = NormalizeEmail(options.Email);
+            var normalizedEmail = _users.NormalizeEmail(options.Email);
 
             if (UsesDatabase)
             {
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
 
-                if (!await UserExistsAsync(connection, normalizedEmail))
+                if (!await _userRepository.ExistsAsync(connection, normalizedEmail))
                 {
-                    await InsertUserAsync(connection, CreateUser(options.Name, normalizedEmail, options.Password));
+                    await _userRepository.InsertAsync(connection, _users.CreateUser(options.Name, normalizedEmail, options.Password));
                 }
 
                 return;
@@ -104,7 +114,7 @@ public sealed class AgendaStore
                 return;
             }
 
-            data.Users.Add(CreateUser(options.Name, normalizedEmail, options.Password));
+            data.Users.Add(_users.CreateUser(options.Name, normalizedEmail, options.Password));
             await SaveAsync(data);
         }
         finally
@@ -123,14 +133,14 @@ public sealed class AgendaStore
         await _lock.WaitAsync();
         try
         {
-            var normalizedEmail = NormalizeEmail(email);
+            var normalizedEmail = _users.NormalizeEmail(email);
             UserAccount? user;
 
             if (UsesDatabase)
             {
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
-                user = await GetUserByEmailAsync(connection, normalizedEmail);
+                user = await _userRepository.GetByEmailAsync(connection, normalizedEmail);
             }
             else
             {
@@ -143,11 +153,7 @@ public sealed class AgendaStore
                 return null;
             }
 
-            var hash = HashPassword(password, user.PasswordSalt);
-            return CryptographicOperations.FixedTimeEquals(
-                Convert.FromBase64String(hash),
-                Convert.FromBase64String(user.PasswordHash)
-            )
+            return _users.IsPasswordValid(user, password)
                 ? user
                 : null;
         }
@@ -185,7 +191,7 @@ public sealed class AgendaStore
 
     public async Task<(bool Success, string Message, AgendaNote? Note)> CreateNoteAsync(Guid userId, NoteRequest request)
     {
-        var validationMessage = ValidateNote(request);
+        var validationMessage = _notes.Validate(request);
 
         if (validationMessage is not null)
         {
@@ -195,19 +201,7 @@ public sealed class AgendaStore
         await _lock.WaitAsync();
         try
         {
-            var now = DateTimeOffset.UtcNow;
-            var note = new AgendaNote(
-                Guid.NewGuid(),
-                userId,
-                CleanTitle(request.Title),
-                request.Body?.Trim() ?? string.Empty,
-                request.NoteDate,
-                request.NoteTime,
-                CleanColor(request.Color),
-                request.IsCompleted,
-                now,
-                now
-            );
+            var note = _notes.Create(userId, request);
 
             if (UsesDatabase)
             {
@@ -230,7 +224,7 @@ public sealed class AgendaStore
 
     public async Task<(bool Success, string Message, AgendaNote? Note)> UpdateNoteAsync(Guid userId, Guid id, NoteRequest request)
     {
-        var validationMessage = ValidateNote(request);
+        var validationMessage = _notes.Validate(request);
 
         if (validationMessage is not null)
         {
@@ -258,17 +252,7 @@ public sealed class AgendaStore
                 return (false, "Anotacao nao encontrada.", null);
             }
 
-            var existing = data.Notes[index];
-            var localUpdated = existing with
-            {
-                Title = CleanTitle(request.Title),
-                Body = request.Body?.Trim() ?? string.Empty,
-                NoteDate = request.NoteDate,
-                NoteTime = request.NoteTime,
-                Color = CleanColor(request.Color),
-                IsCompleted = request.IsCompleted,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
+            var localUpdated = _notes.Update(data.Notes[index], request);
 
             data.Notes[index] = localUpdated;
             await SaveAsync(data);
@@ -365,49 +349,6 @@ public sealed class AgendaStore
         _schemaReady = true;
     }
 
-    private static async Task<bool> UserExistsAsync(NpgsqlConnection connection, string email)
-    {
-        await using var command = new NpgsqlCommand("select exists(select 1 from users where email = @email)", connection);
-        command.Parameters.AddWithValue("email", email);
-        return (bool)(await command.ExecuteScalarAsync() ?? false);
-    }
-
-    private static async Task InsertUserAsync(NpgsqlConnection connection, UserAccount user)
-    {
-        await using var command = new NpgsqlCommand(
-            """
-            insert into users (id, name, email, password_salt, password_hash, created_at)
-            values (@id, @name, @email, @password_salt, @password_hash, @created_at)
-            """,
-            connection
-        );
-
-        command.Parameters.AddWithValue("id", user.Id);
-        command.Parameters.AddWithValue("name", user.Name);
-        command.Parameters.AddWithValue("email", user.Email);
-        command.Parameters.AddWithValue("password_salt", user.PasswordSalt);
-        command.Parameters.AddWithValue("password_hash", user.PasswordHash);
-        command.Parameters.AddWithValue("created_at", user.CreatedAt);
-
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<UserAccount?> GetUserByEmailAsync(NpgsqlConnection connection, string email)
-    {
-        await using var command = new NpgsqlCommand(
-            """
-            select id, name, email, password_salt, password_hash, created_at
-            from users
-            where email = @email
-            """,
-            connection
-        );
-        command.Parameters.AddWithValue("email", email);
-
-        await using var reader = await command.ExecuteReaderAsync();
-        return await reader.ReadAsync() ? ReadUser(reader) : null;
-    }
-
     private static async Task<List<AgendaNote>> GetNotesFromDatabaseAsync(NpgsqlConnection connection, Guid userId)
     {
         await using var command = new NpgsqlCommand(
@@ -446,7 +387,7 @@ public sealed class AgendaStore
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<AgendaNote?> UpdateNoteInDatabaseAsync(
+    private async Task<AgendaNote?> UpdateNoteInDatabaseAsync(
         NpgsqlConnection connection,
         Guid userId,
         Guid id,
@@ -471,11 +412,11 @@ public sealed class AgendaStore
 
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("user_id", userId);
-        command.Parameters.AddWithValue("title", CleanTitle(request.Title));
-        command.Parameters.AddWithValue("body", request.Body?.Trim() ?? string.Empty);
+        command.Parameters.AddWithValue("title", _notes.CleanTitle(request.Title));
+        command.Parameters.AddWithValue("body", _notes.CleanBody(request.Body));
         command.Parameters.AddWithValue("note_date", (object?)request.NoteDate ?? DBNull.Value);
         command.Parameters.AddWithValue("note_time", (object?)request.NoteTime ?? DBNull.Value);
-        command.Parameters.AddWithValue("color", CleanColor(request.Color));
+        command.Parameters.AddWithValue("color", _notes.CleanColor(request.Color));
         command.Parameters.AddWithValue("is_completed", request.IsCompleted);
         command.Parameters.AddWithValue("updated_at", DateTimeOffset.UtcNow);
 
@@ -495,18 +436,6 @@ public sealed class AgendaStore
         command.Parameters.AddWithValue("is_completed", note.IsCompleted);
         command.Parameters.AddWithValue("created_at", note.CreatedAt);
         command.Parameters.AddWithValue("updated_at", note.UpdatedAt);
-    }
-
-    private static UserAccount ReadUser(NpgsqlDataReader reader)
-    {
-        return new UserAccount(
-            reader.GetGuid(0),
-            reader.GetString(1),
-            reader.GetString(2),
-            reader.GetString(3),
-            reader.GetString(4),
-            reader.GetFieldValue<DateTimeOffset>(5)
-        );
     }
 
     private static AgendaNote ReadNote(NpgsqlDataReader reader)
@@ -540,110 +469,6 @@ public sealed class AgendaStore
     {
         await using var stream = File.Create(_filePath);
         await JsonSerializer.SerializeAsync(stream, data, _jsonOptions);
-    }
-
-    private static UserAccount CreateUser(string name, string email, string password)
-    {
-        var salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
-
-        return new UserAccount(
-            Guid.NewGuid(),
-            name.Trim(),
-            email,
-            salt,
-            HashPassword(password, salt),
-            DateTimeOffset.UtcNow
-        );
-    }
-
-    private static string HashPassword(string password, string salt)
-    {
-        var hash = Rfc2898DeriveBytes.Pbkdf2(
-            password,
-            Convert.FromBase64String(salt),
-            100_000,
-            HashAlgorithmName.SHA256,
-            32
-        );
-
-        return Convert.ToBase64String(hash);
-    }
-
-    private static string? ValidateUserInput(string name, string email, string password)
-    {
-        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
-        {
-            return "Preencha nome, e-mail e senha.";
-        }
-
-        if (name.Trim().Length > 80)
-        {
-            return "O nome deve ter no maximo 80 caracteres.";
-        }
-
-        if (!IsValidEmail(email))
-        {
-            return "Informe um e-mail valido.";
-        }
-
-        if (password.Length < 5 || password.Length > 80)
-        {
-            return "A senha deve ter entre 5 e 80 caracteres.";
-        }
-
-        if (!password.Any(char.IsUpper) || !password.Any(char.IsLower) || !password.Any(char.IsDigit))
-        {
-            return "A senha precisa ter pelo menos uma letra maiuscula, uma letra minuscula e um numero.";
-        }
-
-        return null;
-    }
-
-    private static string? ValidateNote(NoteRequest request)
-    {
-        if (request.Title?.Length > 100)
-        {
-            return "O titulo deve ter no maximo 100 caracteres.";
-        }
-
-        if (request.Body?.Length > 3000)
-        {
-            return "Os detalhes devem ter no maximo 3000 caracteres.";
-        }
-
-        if (!AllowedColors.Contains(CleanColor(request.Color)))
-        {
-            return "Escolha uma cor valida.";
-        }
-
-        return null;
-    }
-
-    private static bool IsValidEmail(string email)
-    {
-        try
-        {
-            return new MailAddress(email).Address == email.Trim();
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static string NormalizeEmail(string email)
-    {
-        return email.Trim().ToLowerInvariant();
-    }
-
-    private static string CleanTitle(string? title)
-    {
-        return string.IsNullOrWhiteSpace(title) ? "Sem titulo" : title.Trim();
-    }
-
-    private static string CleanColor(string? color)
-    {
-        return string.IsNullOrWhiteSpace(color) ? "paper" : color.Trim();
     }
 
     private static string? ResolveConnectionString(IConfiguration configuration)

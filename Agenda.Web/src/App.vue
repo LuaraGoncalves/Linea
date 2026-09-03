@@ -107,7 +107,6 @@ async function submitAuth() {
     const passwordMessage = validatePassword(authForm.password)
 
     if (passwordMessage) {
-      message.value = passwordMessage
       return
     }
   }
