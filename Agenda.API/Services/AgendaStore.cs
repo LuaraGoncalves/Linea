@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Agenda.API.Contracts;
+using Agenda.API.Data;
 using Agenda.API.Models;
 using Npgsql;
 
@@ -9,6 +10,7 @@ namespace Agenda.API.Services;
 public sealed class AgendaStore
 {
     private readonly NoteService _notes;
+    private readonly UserRepository _userRepository;
     private readonly UserService _users;
     private readonly string? _connectionString;
     private readonly string _filePath;
@@ -19,10 +21,17 @@ public sealed class AgendaStore
     };
     private bool _schemaReady;
 
-    public AgendaStore(IConfiguration configuration, IWebHostEnvironment environment, UserService users, NoteService notes)
+    public AgendaStore(
+        IConfiguration configuration,
+        IWebHostEnvironment environment,
+        UserService users,
+        NoteService notes,
+        UserRepository userRepository
+    )
     {
         _users = users;
         _notes = notes;
+        _userRepository = userRepository;
         _connectionString = ResolveConnectionString(configuration);
 
         var dataFolder = Path.Combine(environment.ContentRootPath, "App_Data");
@@ -49,13 +58,13 @@ public sealed class AgendaStore
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
 
-                if (await UserExistsAsync(connection, normalizedEmail))
+                if (await _userRepository.ExistsAsync(connection, normalizedEmail))
                 {
                     return (false, "Este e-mail ja foi cadastrado.", null);
                 }
 
                 var user = _users.CreateUser(name, normalizedEmail, password);
-                await InsertUserAsync(connection, user);
+                await _userRepository.InsertAsync(connection, user);
                 return (true, "Conta criada.", user);
             }
 
@@ -90,9 +99,9 @@ public sealed class AgendaStore
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
 
-                if (!await UserExistsAsync(connection, normalizedEmail))
+                if (!await _userRepository.ExistsAsync(connection, normalizedEmail))
                 {
-                    await InsertUserAsync(connection, _users.CreateUser(options.Name, normalizedEmail, options.Password));
+                    await _userRepository.InsertAsync(connection, _users.CreateUser(options.Name, normalizedEmail, options.Password));
                 }
 
                 return;
@@ -131,7 +140,7 @@ public sealed class AgendaStore
             {
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
-                user = await GetUserByEmailAsync(connection, normalizedEmail);
+                user = await _userRepository.GetByEmailAsync(connection, normalizedEmail);
             }
             else
             {
@@ -340,49 +349,6 @@ public sealed class AgendaStore
         _schemaReady = true;
     }
 
-    private static async Task<bool> UserExistsAsync(NpgsqlConnection connection, string email)
-    {
-        await using var command = new NpgsqlCommand("select exists(select 1 from users where email = @email)", connection);
-        command.Parameters.AddWithValue("email", email);
-        return (bool)(await command.ExecuteScalarAsync() ?? false);
-    }
-
-    private static async Task InsertUserAsync(NpgsqlConnection connection, UserAccount user)
-    {
-        await using var command = new NpgsqlCommand(
-            """
-            insert into users (id, name, email, password_salt, password_hash, created_at)
-            values (@id, @name, @email, @password_salt, @password_hash, @created_at)
-            """,
-            connection
-        );
-
-        command.Parameters.AddWithValue("id", user.Id);
-        command.Parameters.AddWithValue("name", user.Name);
-        command.Parameters.AddWithValue("email", user.Email);
-        command.Parameters.AddWithValue("password_salt", user.PasswordSalt);
-        command.Parameters.AddWithValue("password_hash", user.PasswordHash);
-        command.Parameters.AddWithValue("created_at", user.CreatedAt);
-
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<UserAccount?> GetUserByEmailAsync(NpgsqlConnection connection, string email)
-    {
-        await using var command = new NpgsqlCommand(
-            """
-            select id, name, email, password_salt, password_hash, created_at
-            from users
-            where email = @email
-            """,
-            connection
-        );
-        command.Parameters.AddWithValue("email", email);
-
-        await using var reader = await command.ExecuteReaderAsync();
-        return await reader.ReadAsync() ? ReadUser(reader) : null;
-    }
-
     private static async Task<List<AgendaNote>> GetNotesFromDatabaseAsync(NpgsqlConnection connection, Guid userId)
     {
         await using var command = new NpgsqlCommand(
@@ -470,18 +436,6 @@ public sealed class AgendaStore
         command.Parameters.AddWithValue("is_completed", note.IsCompleted);
         command.Parameters.AddWithValue("created_at", note.CreatedAt);
         command.Parameters.AddWithValue("updated_at", note.UpdatedAt);
-    }
-
-    private static UserAccount ReadUser(NpgsqlDataReader reader)
-    {
-        return new UserAccount(
-            reader.GetGuid(0),
-            reader.GetString(1),
-            reader.GetString(2),
-            reader.GetString(3),
-            reader.GetString(4),
-            reader.GetFieldValue<DateTimeOffset>(5)
-        );
     }
 
     private static AgendaNote ReadNote(NpgsqlDataReader reader)
