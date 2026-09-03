@@ -650,6 +650,7 @@ textarea:focus {
   color: #5a4630;
   line-height: 1.45;
   -webkit-box-orient: vertical;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
 }
 
