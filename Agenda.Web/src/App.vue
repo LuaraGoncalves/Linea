@@ -114,24 +114,15 @@ async function submitAuth() {
   loading.value = true
 
   try {
-    const payload =
-      authMode.value === 'register'
-        ? authForm
-        : {
-            email: authForm.email,
-            password: authForm.password
-          }
-
-    const response = authMode.value === 'register' ? await register(payload) : await login(payload)
+    const response = authMode.value === 'register'
+      ? await register(createAuthPayload())
+      : await login(createLoginPayload())
     session.value = response
     saveSession(response)
     resetAuthForm()
     await loadNotes()
   } catch (error) {
-    message.value = error.message
-    if (error.message.includes('sessao expirou')) {
-      logout()
-    }
+    handleRequestError(error)
   } finally {
     loading.value = false
   }
@@ -148,10 +139,7 @@ async function loadNotes() {
   try {
     notes.value = await listNotes(session.value.token)
   } catch (error) {
-    message.value = error.message
-    if (error.message.includes('sessao expirou')) {
-      logout()
-    }
+    handleRequestError(error)
   } finally {
     loading.value = false
   }
@@ -165,32 +153,20 @@ async function saveNote() {
   saving.value = true
   message.value = ''
 
-  const payload = {
-    title: noteForm.title,
-    body: noteForm.body,
-    noteDate: noteForm.noteDate || null,
-    noteTime: noteForm.noteTime || null,
-    color: noteForm.color,
-    isCompleted: noteForm.isCompleted
-  }
-
   try {
     if (selectedNote.value) {
-      const updated = await updateNote(session.value.token, selectedNote.value.id, payload)
-      notes.value = notes.value.map((note) => (note.id === updated.id ? updated : note))
+      const updated = await updateNote(session.value.token, selectedNote.value.id, createNotePayload())
+      replaceNote(updated)
       selectedNoteId.value = updated.id
     } else {
-      const created = await createNote(session.value.token, payload)
+      const created = await createNote(session.value.token, createNotePayload())
       notes.value = [...notes.value, created]
       selectedNoteId.value = created.id
     }
 
     resetNoteForm()
   } catch (error) {
-    message.value = error.message
-    if (error.message.includes('sessao expirou')) {
-      logout()
-    }
+    handleRequestError(error)
   } finally {
     saving.value = false
   }
@@ -237,27 +213,15 @@ async function saveReadingNote() {
   saving.value = true
   message.value = ''
 
-  const payload = {
-    title: noteForm.title,
-    body: noteForm.body,
-    noteDate: noteForm.noteDate || null,
-    noteTime: noteForm.noteTime || null,
-    color: noteForm.color,
-    isCompleted: noteForm.isCompleted
-  }
-
   try {
-    const updated = await updateNote(session.value.token, selectedNoteId.value, payload)
-    notes.value = notes.value.map((note) => (note.id === updated.id ? updated : note))
+    const updated = await updateNote(session.value.token, selectedNoteId.value, createNotePayload())
+    replaceNote(updated)
     selectedNoteId.value = updated.id
     readingNoteId.value = updated.id
     noteForm.title = updated.title
     noteForm.body = updated.body
   } catch (error) {
-    message.value = error.message
-    if (error.message.includes('sessao expirou')) {
-      logout()
-    }
+    handleRequestError(error)
   } finally {
     saving.value = false
   }
@@ -341,10 +305,7 @@ async function removeNote(id) {
       closeNoteReader()
     }
   } catch (error) {
-    message.value = error.message
-    if (error.message.includes('sessao expirou')) {
-      logout()
-    }
+    handleRequestError(error)
   } finally {
     deletingId.value = null
   }
@@ -379,26 +340,52 @@ async function toggleCompleted(note) {
     return
   }
 
-  const payload = {
-    title: note.title,
-    body: note.body,
-    noteDate: note.noteDate,
-    noteTime: note.noteTime,
-    color: note.color,
-    isCompleted: !note.isCompleted
-  }
-
   try {
-    const updated = await updateNote(session.value.token, note.id, payload)
-    notes.value = notes.value.map((item) => (item.id === updated.id ? updated : item))
+    const updated = await updateNote(session.value.token, note.id, createNotePayload(note, !note.isCompleted))
+    replaceNote(updated)
     if (selectedNoteId.value === updated.id) {
       noteForm.isCompleted = updated.isCompleted
     }
   } catch (error) {
-    message.value = error.message
-    if (error.message.includes('sessao expirou')) {
-      logout()
-    }
+    handleRequestError(error)
+  }
+}
+
+function createAuthPayload() {
+  return {
+    name: authForm.name,
+    email: authForm.email,
+    password: authForm.password
+  }
+}
+
+function createLoginPayload() {
+  return {
+    email: authForm.email,
+    password: authForm.password
+  }
+}
+
+function createNotePayload(source = noteForm, isCompleted = source.isCompleted) {
+  return {
+    title: source.title,
+    body: source.body,
+    noteDate: source.noteDate || null,
+    noteTime: source.noteTime || null,
+    color: source.color,
+    isCompleted
+  }
+}
+
+function replaceNote(updatedNote) {
+  notes.value = notes.value.map((note) => (note.id === updatedNote.id ? updatedNote : note))
+}
+
+function handleRequestError(error) {
+  message.value = error.message
+
+  if (error.message.includes('sessao expirou')) {
+    logout()
   }
 }
 

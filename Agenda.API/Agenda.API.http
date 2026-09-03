@@ -6,7 +6,7 @@ Content-Type: application/json
 {
   "name": "Maria Agenda",
   "email": "maria@agenda.local",
-  "password": "123456"
+  "password": "Teste1"
 }
 
 ###
@@ -16,7 +16,7 @@ Content-Type: application/json
 
 {
   "email": "teste@agenda.local",
-  "password": "123456"
+  "password": "Teste1"
 }
 
 ###
