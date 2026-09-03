@@ -1128,8 +1128,10 @@ textarea:focus {
     grid-template-columns: 1fr;
     height: auto;
     min-height: auto;
+    gap: 14px;
     background: transparent;
     box-shadow: none;
+    overflow: visible;
   }
 
   .notebook::before {
@@ -1143,11 +1145,14 @@ textarea:focus {
 
   .page {
     min-height: 560px;
+    border: 1px solid rgba(83, 56, 32, 0.18);
+    border-radius: 12px;
+    box-shadow: 0 16px 34px rgba(73, 48, 27, 0.12), inset 0 0 28px rgba(116, 79, 42, 0.12);
   }
 
   .page-left,
   .page-right {
-    border-radius: 0;
+    border-radius: 12px;
   }
 
   .form-row {
@@ -1190,7 +1195,7 @@ textarea:focus {
   }
 
   .page {
-    min-height: auto;
+    min-height: 500px;
   }
 
   .page-heading {
