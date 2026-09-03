@@ -8,7 +8,7 @@ namespace Agenda.API.Services;
 
 public sealed class AgendaStore
 {
-    private static readonly string[] AllowedColors = ["paper", "rose", "sage", "blue"];
+    private readonly NoteService _notes;
     private readonly UserService _users;
     private readonly string? _connectionString;
     private readonly string _filePath;
@@ -19,9 +19,10 @@ public sealed class AgendaStore
     };
     private bool _schemaReady;
 
-    public AgendaStore(IConfiguration configuration, IWebHostEnvironment environment, UserService users)
+    public AgendaStore(IConfiguration configuration, IWebHostEnvironment environment, UserService users, NoteService notes)
     {
         _users = users;
+        _notes = notes;
         _connectionString = ResolveConnectionString(configuration);
 
         var dataFolder = Path.Combine(environment.ContentRootPath, "App_Data");
@@ -181,7 +182,7 @@ public sealed class AgendaStore
 
     public async Task<(bool Success, string Message, AgendaNote? Note)> CreateNoteAsync(Guid userId, NoteRequest request)
     {
-        var validationMessage = ValidateNote(request);
+        var validationMessage = _notes.Validate(request);
 
         if (validationMessage is not null)
         {
@@ -191,19 +192,7 @@ public sealed class AgendaStore
         await _lock.WaitAsync();
         try
         {
-            var now = DateTimeOffset.UtcNow;
-            var note = new AgendaNote(
-                Guid.NewGuid(),
-                userId,
-                CleanTitle(request.Title),
-                request.Body?.Trim() ?? string.Empty,
-                request.NoteDate,
-                request.NoteTime,
-                CleanColor(request.Color),
-                request.IsCompleted,
-                now,
-                now
-            );
+            var note = _notes.Create(userId, request);
 
             if (UsesDatabase)
             {
@@ -226,7 +215,7 @@ public sealed class AgendaStore
 
     public async Task<(bool Success, string Message, AgendaNote? Note)> UpdateNoteAsync(Guid userId, Guid id, NoteRequest request)
     {
-        var validationMessage = ValidateNote(request);
+        var validationMessage = _notes.Validate(request);
 
         if (validationMessage is not null)
         {
@@ -254,17 +243,7 @@ public sealed class AgendaStore
                 return (false, "Anotacao nao encontrada.", null);
             }
 
-            var existing = data.Notes[index];
-            var localUpdated = existing with
-            {
-                Title = CleanTitle(request.Title),
-                Body = request.Body?.Trim() ?? string.Empty,
-                NoteDate = request.NoteDate,
-                NoteTime = request.NoteTime,
-                Color = CleanColor(request.Color),
-                IsCompleted = request.IsCompleted,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
+            var localUpdated = _notes.Update(data.Notes[index], request);
 
             data.Notes[index] = localUpdated;
             await SaveAsync(data);
@@ -442,7 +421,7 @@ public sealed class AgendaStore
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<AgendaNote?> UpdateNoteInDatabaseAsync(
+    private async Task<AgendaNote?> UpdateNoteInDatabaseAsync(
         NpgsqlConnection connection,
         Guid userId,
         Guid id,
@@ -467,11 +446,11 @@ public sealed class AgendaStore
 
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("user_id", userId);
-        command.Parameters.AddWithValue("title", CleanTitle(request.Title));
-        command.Parameters.AddWithValue("body", request.Body?.Trim() ?? string.Empty);
+        command.Parameters.AddWithValue("title", _notes.CleanTitle(request.Title));
+        command.Parameters.AddWithValue("body", _notes.CleanBody(request.Body));
         command.Parameters.AddWithValue("note_date", (object?)request.NoteDate ?? DBNull.Value);
         command.Parameters.AddWithValue("note_time", (object?)request.NoteTime ?? DBNull.Value);
-        command.Parameters.AddWithValue("color", CleanColor(request.Color));
+        command.Parameters.AddWithValue("color", _notes.CleanColor(request.Color));
         command.Parameters.AddWithValue("is_completed", request.IsCompleted);
         command.Parameters.AddWithValue("updated_at", DateTimeOffset.UtcNow);
 
@@ -536,36 +515,6 @@ public sealed class AgendaStore
     {
         await using var stream = File.Create(_filePath);
         await JsonSerializer.SerializeAsync(stream, data, _jsonOptions);
-    }
-
-    private static string? ValidateNote(NoteRequest request)
-    {
-        if (request.Title?.Length > 100)
-        {
-            return "O titulo deve ter no maximo 100 caracteres.";
-        }
-
-        if (request.Body?.Length > 3000)
-        {
-            return "Os detalhes devem ter no maximo 3000 caracteres.";
-        }
-
-        if (!AllowedColors.Contains(CleanColor(request.Color)))
-        {
-            return "Escolha uma cor valida.";
-        }
-
-        return null;
-    }
-
-    private static string CleanTitle(string? title)
-    {
-        return string.IsNullOrWhiteSpace(title) ? "Sem titulo" : title.Trim();
-    }
-
-    private static string CleanColor(string? color)
-    {
-        return string.IsNullOrWhiteSpace(color) ? "paper" : color.Trim();
     }
 
     private static string? ResolveConnectionString(IConfiguration configuration)
