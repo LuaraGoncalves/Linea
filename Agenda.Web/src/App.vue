@@ -5,10 +5,13 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   ListChecks,
   LogOut,
   NotebookPen,
+  Pencil,
   Plus,
   Save,
   Trash2,
@@ -36,6 +39,10 @@ const loading = ref(false)
 const saving = ref(false)
 const deletingId = ref(null)
 const message = ref('')
+const readingNoteId = ref(null)
+const pageDirection = ref('next')
+const isTurningPage = ref(false)
+const isEditorOpen = ref(true)
 
 const authForm = reactive({
   name: '',
@@ -45,7 +52,7 @@ const authForm = reactive({
 
 const noteForm = reactive({
   title: '',
-  noteDate: new Date().toISOString().slice(0, 10),
+  noteDate: getLocalDateValue(),
   noteTime: '',
   color: 'paper',
   body: '',
@@ -56,9 +63,17 @@ const selectedNote = computed(() => {
   return notes.value.find((note) => note.id === selectedNoteId.value) ?? null
 })
 
+const readingNote = computed(() => {
+  return upcomingNotes.value.find((note) => note.id === readingNoteId.value) ?? null
+})
+
+const readingNoteIndex = computed(() => {
+  return upcomingNotes.value.findIndex((note) => note.id === readingNoteId.value)
+})
+
 const todayNotes = computed(() => {
-  const today = new Date().toISOString().slice(0, 10)
-  return notes.value.filter((note) => note.noteDate === today)
+  const today = getLocalDateValue()
+  return notes.value.filter((note) => normalizeNoteDate(note.noteDate) === today)
 })
 
 const pendingNotes = computed(() => notes.value.filter((note) => !note.isCompleted))
@@ -67,8 +82,8 @@ const overdueNotes = computed(() => notes.value.filter((note) => isOverdue(note)
 
 const upcomingNotes = computed(() => {
   return [...notes.value].sort((first, second) => {
-    const firstDate = `${first.noteDate ?? '9999-12-31'} ${first.noteTime ?? '99:99'}`
-    const secondDate = `${second.noteDate ?? '9999-12-31'} ${second.noteTime ?? '99:99'}`
+    const firstDate = `${normalizeNoteDate(first.noteDate) ?? '9999-12-31'} ${first.noteTime ?? '99:99'}`
+    const secondDate = `${normalizeNoteDate(second.noteDate) ?? '9999-12-31'} ${second.noteTime ?? '99:99'}`
     return firstDate.localeCompare(secondDate)
   })
 })
@@ -165,13 +180,128 @@ async function saveNote() {
 }
 
 function editNote(note) {
+  isEditorOpen.value = true
+  fillNoteForm(note)
+}
+
+function fillNoteForm(note) {
   selectedNoteId.value = note.id
+  readingNoteId.value = note.id
   noteForm.title = note.title
-  noteForm.noteDate = note.noteDate ?? ''
+  noteForm.noteDate = normalizeNoteDate(note.noteDate) ?? ''
   noteForm.noteTime = note.noteTime ?? ''
   noteForm.color = note.color ?? 'paper'
   noteForm.body = note.body
   noteForm.isCompleted = Boolean(note.isCompleted)
+}
+
+function openNoteReader(note) {
+  fillNoteForm(note)
+  pageDirection.value = 'next'
+  isEditorOpen.value = false
+}
+
+function closeNoteReader() {
+  readingNoteId.value = null
+  isTurningPage.value = false
+  isEditorOpen.value = true
+}
+
+function openNewNoteForm() {
+  resetNoteForm()
+  isEditorOpen.value = true
+}
+
+async function saveReadingNote() {
+  if (!session.value?.token || !selectedNoteId.value || isEditorOpen.value) {
+    return
+  }
+
+  saving.value = true
+  message.value = ''
+
+  const payload = {
+    title: noteForm.title,
+    body: noteForm.body,
+    noteDate: noteForm.noteDate || null,
+    noteTime: noteForm.noteTime || null,
+    color: noteForm.color,
+    isCompleted: noteForm.isCompleted
+  }
+
+  try {
+    const updated = await updateNote(session.value.token, selectedNoteId.value, payload)
+    notes.value = notes.value.map((note) => (note.id === updated.id ? updated : note))
+    selectedNoteId.value = updated.id
+    readingNoteId.value = updated.id
+    noteForm.title = updated.title
+    noteForm.body = updated.body
+  } catch (error) {
+    message.value = error.message
+    if (error.message.includes('sessao expirou')) {
+      logout()
+    }
+  } finally {
+    saving.value = false
+  }
+}
+
+async function moveReadingPage(step) {
+  if (!upcomingNotes.value.length || isTurningPage.value) {
+    return
+  }
+
+  await saveReadingNote()
+
+  const currentIndex = readingNoteIndex.value < 0 ? 0 : readingNoteIndex.value
+  const nextIndex = (currentIndex + step + upcomingNotes.value.length) % upcomingNotes.value.length
+  pageDirection.value = step > 0 ? 'next' : 'previous'
+  isTurningPage.value = true
+  playPageTurnSound()
+
+  window.setTimeout(() => {
+    fillNoteForm(upcomingNotes.value[nextIndex])
+
+    window.setTimeout(() => {
+      isTurningPage.value = false
+    }, 310)
+  }, 520)
+}
+
+function playPageTurnSound() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext
+
+  if (!AudioContext) {
+    return
+  }
+
+  const audio = new AudioContext()
+  const noiseLength = Math.floor(audio.sampleRate * 0.16)
+  const buffer = audio.createBuffer(1, noiseLength, audio.sampleRate)
+  const data = buffer.getChannelData(0)
+
+  for (let i = 0; i < noiseLength; i += 1) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / noiseLength)
+  }
+
+  const source = audio.createBufferSource()
+  const filter = audio.createBiquadFilter()
+  const gain = audio.createGain()
+
+  source.buffer = buffer
+  filter.type = 'bandpass'
+  filter.frequency.setValueAtTime(1200, audio.currentTime)
+  filter.frequency.exponentialRampToValueAtTime(2600, audio.currentTime + 0.12)
+  gain.gain.setValueAtTime(0.0001, audio.currentTime)
+  gain.gain.exponentialRampToValueAtTime(0.18, audio.currentTime + 0.02)
+  gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.16)
+
+  source.connect(filter)
+  filter.connect(gain)
+  gain.connect(audio.destination)
+  source.start()
+  source.stop(audio.currentTime + 0.17)
+  source.onended = () => audio.close()
 }
 
 async function removeNote(id) {
@@ -189,6 +319,10 @@ async function removeNote(id) {
     if (selectedNoteId.value === id) {
       resetNoteForm()
     }
+
+    if (readingNoteId.value === id) {
+      closeNoteReader()
+    }
   } catch (error) {
     message.value = error.message
     if (error.message.includes('sessao expirou')) {
@@ -202,11 +336,12 @@ async function removeNote(id) {
 function resetNoteForm() {
   selectedNoteId.value = null
   noteForm.title = ''
-  noteForm.noteDate = new Date().toISOString().slice(0, 10)
+  noteForm.noteDate = getLocalDateValue()
   noteForm.noteTime = ''
   noteForm.color = 'paper'
   noteForm.body = ''
   noteForm.isCompleted = false
+  isEditorOpen.value = true
 }
 
 function resetAuthForm() {
@@ -255,12 +390,35 @@ function isOverdue(note) {
     return false
   }
 
-  const limit = note.noteTime ? `${note.noteDate}T${note.noteTime}:00` : `${note.noteDate}T23:59:59` 
-  return new Date(limit) < new Date()
+  const noteDate = normalizeNoteDate(note.noteDate)
+  const today = getLocalDateValue()
+
+  if (!noteDate) {
+    return false
+  }
+
+  if (noteDate < today) {
+    return true
+  }
+
+  if (noteDate > today || !note.noteTime) {
+    return false
+  }
+
+  const [hour, minute] = note.noteTime.split(':').map(Number)
+
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+    return false
+  }
+
+  const now = new Date()
+  return hour < now.getHours() || (hour === now.getHours() && minute < now.getMinutes())
 }
 
 function formatDate(date) {
-  if (!date) {
+  const noteDate = normalizeNoteDate(date)
+
+  if (!noteDate) {
     return 'Sem data'
   }
 
@@ -268,7 +426,22 @@ function formatDate(date) {
     day: '2-digit',
     month: 'short',
     weekday: 'short'
-  }).format(new Date(`${date}T00:00:00`))
+  }).format(new Date(`${noteDate}T00:00:00`))
+}
+
+function getLocalDateValue(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function normalizeNoteDate(date) {
+  if (!date) {
+    return null
+  }
+
+  return String(date).slice(0, 10)
 }
 </script>
 
@@ -343,16 +516,100 @@ function formatDate(date) {
       </header>
 
       <div class="notebook">
-        <section class="page page-left">
+        <section class="page page-left list-page">
+          <div class="page-heading">
+            <div>
+              <p>{{ todayNotes.length === 1 ? '1 item para hoje' : `${todayNotes.length} itens para hoje` }}</p>
+              <h2>Próximos registros</h2>
+            </div>
+            <CalendarDays :size="30" />
+          </div>
+
+          <div class="pinned-note">
+            <strong>Resumo do dia</strong>
+            <span>{{ todayNotes.length ? 'Você tem registros para conferir hoje.' : 'Hoje ainda está livre.' }}</span>
+          </div>
+
+          <div class="notes-list">
+            <article
+              v-for="note in upcomingNotes"
+              :key="note.id"
+              class="note-card"
+              :class="[`tone-${note.color}`, { selected: note.id === selectedNoteId, completed: note.isCompleted, overdue: isOverdue(note) }]"
+            >
+              <button class="note-content" type="button" @click="openNoteReader(note)">
+                <span class="note-date">
+                  <Clock :size="15" />
+                  {{ formatDate(note.noteDate) }} {{ note.noteTime ? `às ${note.noteTime}` : '' }}
+                </span>
+                <div class="note-badges">
+                  <span v-if="isOverdue(note)" class="late-badge">Atrasada</span>
+                  <span v-if="note.isCompleted" class="done-badge">Concluída</span>
+                </div>
+                <strong>{{ note.title }}</strong>
+                <p>{{ note.body || 'Sem detalhes adicionais.' }}</p>
+              </button>
+              <button class="complete-button" :class="{ active: note.isCompleted }" type="button" :title="note.isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'" @click="toggleCompleted(note)">
+                <CheckCircle2 :size="16" />
+              </button>
+              <button class="icon-button danger" :disabled="deletingId === note.id" type="button" title="Apagar anotação" @click="removeNote(note.id)">
+                <Trash2 :size="16" />
+              </button>
+            </article>
+
+            <div v-if="!notes.length" class="empty-state">
+              <Check :size="34" />
+              <strong>Nenhuma anotação ainda</strong>
+              <span>Escreva a primeira página da sua agenda.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="page page-right editor-page" :class="{ 'reader-page': readingNote && !isEditorOpen }">
           <div class="page-heading">
             <div>
               <p>{{ new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }}</p>
-              <h1>Minhas anotações</h1>
+              <h1>{{ readingNote && !isEditorOpen ? 'Folha da tarefa' : 'Minhas anotações' }}</h1>
             </div>
-            <NotebookPen :size="32" />
+            <button v-if="readingNote && !isEditorOpen" class="icon-button" type="button" title="Editar anotação" @click="editNote(readingNote)">
+              <Pencil :size="17" />
+            </button>
+            <NotebookPen v-else :size="32" />
           </div>
 
-          <form class="note-form" @submit.prevent="saveNote">
+          <article v-if="readingNote && !isEditorOpen" class="reader-sheet" :class="[`turn-${pageDirection}`, { turning: isTurningPage }]">
+            <span class="page-turn-leaf" aria-hidden="true"></span>
+            <span class="page-turn-shadow" aria-hidden="true"></span>
+
+            <p class="reader-date">{{ formatDate(readingNote.noteDate) }} {{ readingNote.noteTime ? `às ${readingNote.noteTime}` : '' }}</p>
+            <input
+              v-model="noteForm.title"
+              class="reader-title-input"
+              maxlength="100"
+              placeholder="Titulo da tarefa"
+              type="text"
+              @blur="saveReadingNote"
+            />
+            <textarea
+              v-model="noteForm.body"
+              class="reader-task-input"
+              maxlength="3000"
+              placeholder="Escreva os detalhes da tarefa..."
+              @blur="saveReadingNote"
+            ></textarea>
+
+            <footer class="reader-controls">
+              <button type="button" title="Anotação anterior" @click="moveReadingPage(-1)">
+                <ChevronLeft :size="24" />
+              </button>
+              <span>{{ readingNoteIndex + 1 }} de {{ upcomingNotes.length }}</span>
+              <button type="button" title="Próxima anotação" @click="moveReadingPage(1)">
+                <ChevronRight :size="24" />
+              </button>
+            </footer>
+          </article>
+
+          <form v-else class="note-form" @submit.prevent="saveNote">
             <div v-if="selectedNote" class="editing-ribbon">Editando anotação</div>
             <label>
               Título
@@ -391,7 +648,7 @@ function formatDate(date) {
             </label>
 
             <div class="form-actions">
-              <button class="ghost-action" type="button" @click="resetNoteForm">
+              <button class="ghost-action" type="button" @click="openNewNoteForm">
                 <Plus :size="17" />
                 Nova
               </button>
@@ -404,56 +661,8 @@ function formatDate(date) {
 
           <p v-if="message" class="message" role="alert">{{ message }}</p>
         </section>
-
-        <section class="page page-right">
-          <div class="page-heading">
-            <div>
-              <p>{{ todayNotes.length === 1 ? '1 item para hoje' : `${todayNotes.length} itens para hoje` }}</p>
-              <h2>Próximos registros</h2>
-            </div>
-            <CalendarDays :size="30" />
-          </div>
-
-          <div class="pinned-note">
-            <strong>Resumo do dia</strong>
-            <span>{{ todayNotes.length ? 'Você tem registros para conferir hoje.' : 'Hoje ainda está livre.' }}</span>
-          </div>
-
-          <div class="notes-list">
-            <article
-              v-for="note in upcomingNotes"
-              :key="note.id"
-              class="note-card"
-              :class="[`tone-${note.color}`, { selected: note.id === selectedNoteId, completed: note.isCompleted, overdue: isOverdue(note) }]"
-            >
-              <button class="note-content" type="button" @click="editNote(note)">
-                <span class="note-date">
-                  <Clock :size="15" />
-                  {{ formatDate(note.noteDate) }} {{ note.noteTime ? `às ${note.noteTime}` : '' }}
-                </span>
-                <div class="note-badges">
-                  <span v-if="isOverdue(note)" class="late-badge">Atrasada</span>
-                  <span v-if="note.isCompleted" class="done-badge">Concluída</span>
-                </div>
-                <strong>{{ note.title }}</strong>
-                <p>{{ note.body || 'Sem detalhes adicionais.' }}</p>
-              </button>
-              <button class="complete-button" :class="{ active: note.isCompleted }" type="button" :title="note.isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'" @click="toggleCompleted(note)">
-                <CheckCircle2 :size="16" />
-              </button>
-              <button class="icon-button danger" :disabled="deletingId === note.id" type="button" title="Apagar anotação" @click="removeNote(note.id)">
-                <Trash2 :size="16" />
-              </button>
-            </article>
-
-            <div v-if="!notes.length" class="empty-state">
-              <Check :size="34" />
-              <strong>Nenhuma anotação ainda</strong>
-              <span>Escreva a primeira página da sua agenda.</span>
-            </div>
-          </div>
-        </section>
       </div>
+
     </section>
   </main>
 </template>
