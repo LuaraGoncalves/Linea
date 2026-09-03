@@ -21,6 +21,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddSingleton<AgendaStore>();
 builder.Services.AddSingleton<PasswordService>();
+builder.Services.AddSingleton<UserService>();
 builder.Services.AddSingleton<TokenService>();
 
 var app = builder.Build();

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Mail;
 using System.Text.Json;
 using Agenda.API.Contracts;
 using Agenda.API.Models;
@@ -10,7 +9,7 @@ namespace Agenda.API.Services;
 public sealed class AgendaStore
 {
     private static readonly string[] AllowedColors = ["paper", "rose", "sage", "blue"];
-    private readonly PasswordService _passwords;
+    private readonly UserService _users;
     private readonly string? _connectionString;
     private readonly string _filePath;
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -20,9 +19,9 @@ public sealed class AgendaStore
     };
     private bool _schemaReady;
 
-    public AgendaStore(IConfiguration configuration, IWebHostEnvironment environment, PasswordService passwords)
+    public AgendaStore(IConfiguration configuration, IWebHostEnvironment environment, UserService users)
     {
-        _passwords = passwords;
+        _users = users;
         _connectionString = ResolveConnectionString(configuration);
 
         var dataFolder = Path.Combine(environment.ContentRootPath, "App_Data");
@@ -32,7 +31,7 @@ public sealed class AgendaStore
 
     public async Task<(bool Success, string Message, UserAccount? User)> CreateUserAsync(string name, string email, string password)
     {
-        var validationMessage = ValidateUserInput(name, email, password);
+        var validationMessage = _users.ValidateRegistration(name, email, password);
 
         if (validationMessage is not null)
         {
@@ -42,7 +41,7 @@ public sealed class AgendaStore
         await _lock.WaitAsync();
         try
         {
-            var normalizedEmail = NormalizeEmail(email);
+            var normalizedEmail = _users.NormalizeEmail(email);
 
             if (UsesDatabase)
             {
@@ -54,7 +53,7 @@ public sealed class AgendaStore
                     return (false, "Este e-mail ja foi cadastrado.", null);
                 }
 
-                var user = CreateUser(name, normalizedEmail, password);
+                var user = _users.CreateUser(name, normalizedEmail, password);
                 await InsertUserAsync(connection, user);
                 return (true, "Conta criada.", user);
             }
@@ -66,7 +65,7 @@ public sealed class AgendaStore
                 return (false, "Este e-mail ja foi cadastrado.", null);
             }
 
-            var localUser = CreateUser(name, normalizedEmail, password);
+            var localUser = _users.CreateUser(name, normalizedEmail, password);
             data.Users.Add(localUser);
             await SaveAsync(data);
 
@@ -83,7 +82,7 @@ public sealed class AgendaStore
         await _lock.WaitAsync();
         try
         {
-            var normalizedEmail = NormalizeEmail(options.Email);
+            var normalizedEmail = _users.NormalizeEmail(options.Email);
 
             if (UsesDatabase)
             {
@@ -92,7 +91,7 @@ public sealed class AgendaStore
 
                 if (!await UserExistsAsync(connection, normalizedEmail))
                 {
-                    await InsertUserAsync(connection, CreateUser(options.Name, normalizedEmail, options.Password));
+                    await InsertUserAsync(connection, _users.CreateUser(options.Name, normalizedEmail, options.Password));
                 }
 
                 return;
@@ -105,7 +104,7 @@ public sealed class AgendaStore
                 return;
             }
 
-            data.Users.Add(CreateUser(options.Name, normalizedEmail, options.Password));
+            data.Users.Add(_users.CreateUser(options.Name, normalizedEmail, options.Password));
             await SaveAsync(data);
         }
         finally
@@ -124,7 +123,7 @@ public sealed class AgendaStore
         await _lock.WaitAsync();
         try
         {
-            var normalizedEmail = NormalizeEmail(email);
+            var normalizedEmail = _users.NormalizeEmail(email);
             UserAccount? user;
 
             if (UsesDatabase)
@@ -144,7 +143,7 @@ public sealed class AgendaStore
                 return null;
             }
 
-            return _passwords.Verify(password, user.PasswordSalt, user.PasswordHash)
+            return _users.IsPasswordValid(user, password)
                 ? user
                 : null;
         }
@@ -539,40 +538,6 @@ public sealed class AgendaStore
         await JsonSerializer.SerializeAsync(stream, data, _jsonOptions);
     }
 
-    private UserAccount CreateUser(string name, string email, string password)
-    {
-        var salt = _passwords.CreateSalt();
-
-        return new UserAccount(
-            Guid.NewGuid(),
-            name.Trim(),
-            email,
-            salt,
-            _passwords.Hash(password, salt),
-            DateTimeOffset.UtcNow
-        );
-    }
-
-    private string? ValidateUserInput(string name, string email, string password)
-    {
-        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
-        {
-            return "Preencha nome, e-mail e senha.";
-        }
-
-        if (name.Trim().Length > 80)
-        {
-            return "O nome deve ter no maximo 80 caracteres.";
-        }
-
-        if (!IsValidEmail(email))
-        {
-            return "Informe um e-mail valido.";
-        }
-
-        return _passwords.Validate(password);
-    }
-
     private static string? ValidateNote(NoteRequest request)
     {
         if (request.Title?.Length > 100)
@@ -591,23 +556,6 @@ public sealed class AgendaStore
         }
 
         return null;
-    }
-
-    private static bool IsValidEmail(string email)
-    {
-        try
-        {
-            return new MailAddress(email).Address == email.Trim();
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static string NormalizeEmail(string email)
-    {
-        return email.Trim().ToLowerInvariant();
     }
 
     private static string CleanTitle(string? title)
