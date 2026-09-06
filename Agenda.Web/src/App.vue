@@ -618,9 +618,14 @@ function validatePassword(password) {
               <p>{{ new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }}</p>
               <h1>{{ readingNote && !isEditorOpen ? 'Folha da tarefa' : 'Minhas anotações' }}</h1>
             </div>
-            <button v-if="readingNote && !isEditorOpen" class="icon-button" type="button" title="Editar anotação" @click="editNote(readingNote)">
-              <Pencil :size="17" />
-            </button>
+            <div v-if="readingNote && !isEditorOpen" class="reader-heading-actions">
+              <button class="icon-button" type="button" title="Nova anotação" @click="openNewNoteForm">
+                <Plus :size="17" />
+              </button>
+              <button class="icon-button" type="button" title="Editar anotação" @click="editNote(readingNote)">
+                <Pencil :size="17" />
+              </button>
+            </div>
             <NotebookPen v-else :size="32" />
           </div>
 
