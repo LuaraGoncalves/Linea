@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import {
   AlertTriangle,
   CalendarDays,
@@ -96,9 +96,11 @@ const passwordValidationMessage = computed(() => {
   return validatePassword(authForm.password)
 })
 
-if (session.value) {
-  loadNotes()
-}
+onMounted(() => {
+  if (session.value) {
+    loadNotes()
+  }
+})
 
 async function submitAuth() {
   message.value = ''
@@ -138,6 +140,7 @@ async function loadNotes() {
 
   try {
     notes.value = await listNotes(session.value.token)
+    await nextTick()
     openFirstNoteReader()
   } catch (error) {
     handleRequestError(error)
