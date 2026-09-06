@@ -138,6 +138,7 @@ async function loadNotes() {
 
   try {
     notes.value = await listNotes(session.value.token)
+    openFirstNoteReader()
   } catch (error) {
     handleRequestError(error)
   } finally {
@@ -192,6 +193,16 @@ function openNoteReader(note) {
   fillNoteForm(note)
   pageDirection.value = 'next'
   isEditorOpen.value = false
+}
+
+function openFirstNoteReader() {
+  const firstNote = upcomingNotes.value[0]
+
+  if (!firstNote) {
+    return
+  }
+
+  openNoteReader(firstNote)
 }
 
 function closeNoteReader() {
