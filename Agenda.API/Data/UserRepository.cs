@@ -59,4 +59,16 @@ public sealed class UserRepository
             reader.GetFieldValue<DateTimeOffset>(5)
         );
     }
+
+    public async Task UpdatePasswordAsync(NpgsqlConnection connection, UserAccount user)
+    {
+        await using var command = new NpgsqlCommand(
+            "update users set password_salt = @salt, password_hash = @hash where id = @id",
+            connection
+        );
+        command.Parameters.AddWithValue("id", user.Id);
+        command.Parameters.AddWithValue("salt", user.PasswordSalt);
+        command.Parameters.AddWithValue("hash", user.PasswordHash);
+        await command.ExecuteNonQueryAsync();
+    }
 }

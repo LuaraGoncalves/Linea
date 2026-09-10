@@ -6,23 +6,19 @@
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   gap: 14px;
-  padding: 28px 28px 22px;
+  padding: 8px 0 0;
   color: var(--ink);
-  border: 1px solid rgba(79, 50, 24, 0.24);
-  border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0)),
-    repeating-linear-gradient(0deg, transparent 0 34px, var(--page-line) 35px),
-    linear-gradient(180deg, rgba(255, 252, 241, 0.86), rgba(237, 207, 158, 0.24)),
-    var(--page);
-  box-shadow: 0 22px 40px rgba(61, 37, 16, 0.16), inset 0 0 0 10px rgba(115, 75, 35, 0.04), inset 0 0 0 11px rgba(86, 55, 27, 0.13);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   transform-origin: left center;
   transform-style: preserve-3d;
   overflow: hidden;
 }
 
 .reader-sheet::before {
-  content: "";
+  content: none;
   position: absolute;
   inset: 14px;
   border: 1px solid rgba(94, 61, 31, 0.2);
@@ -140,7 +136,7 @@
   padding: 0;
   overflow-wrap: anywhere;
   font-family: Caveat, cursive;
-  font-size: clamp(38px, 5vw, 58px);
+  font-size: 36px;
   font-weight: 700;
   line-height: 0.95;
 }
