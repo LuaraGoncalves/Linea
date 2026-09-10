@@ -56,6 +56,16 @@ public sealed class UserService
         return _passwords.Verify(password, user.PasswordSalt, user.PasswordHash);
     }
 
+    public UserAccount WithPassword(UserAccount user, string password)
+    {
+        var salt = _passwords.CreateSalt();
+        return user with
+        {
+            PasswordSalt = salt,
+            PasswordHash = _passwords.Hash(password, salt)
+        };
+    }
+
     private static bool IsValidEmail(string email)
     {
         try

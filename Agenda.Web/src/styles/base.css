@@ -1,21 +1,21 @@
 :root {
   color-scheme: light;
-  --page: #f4ead3;
-  --page-soft: #fff8e8;
-  --page-line: rgba(121, 91, 57, 0.15);
-  --ink: #2f261d;
-  --ink-muted: #695a46;
-  --wood: #4f3522;
-  --wood-soft: #725236;
+  --page: #fdfdfb;
+  --page-soft: #ffffff;
+  --page-line: rgba(74, 87, 80, 0.1);
+  --ink: #303b36;
+  --ink-muted: #68736d;
+  --wood: #426456;
+  --wood-soft: #627c70;
   --rose: #ad5d4c;
   --sage: #64784d;
   --blue: #4e7384;
-  --border: rgba(88, 61, 38, 0.18);
-  --shadow: 0 24px 70px rgba(58, 38, 21, 0.2);
+  --border: rgba(58, 76, 65, 0.16);
+  --shadow: 0 12px 36px rgba(38, 54, 45, 0.07);
   --shadow-soft: 0 14px 34px rgba(73, 48, 27, 0.14);
   font-family: "Nunito Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
-  background: #efe3cd;
+  background: #f0f2f0;
 }
 
 * {
@@ -24,7 +24,7 @@
 
 html {
   color-scheme: light;
-  background: #efe3cd;
+  background: #f0f2f0;
 }
 
 body {
@@ -32,7 +32,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   color: var(--ink);
-  background: #efe3cd;
+  background: #f0f2f0;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -62,10 +62,7 @@ button:disabled {
 .app-shell {
   min-height: 100vh;
   padding: 24px;
-  background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0) 48%),
-    linear-gradient(160deg, rgba(173, 93, 76, 0.12), transparent 34%),
-    linear-gradient(135deg, #f8f0dc 0%, #eadac0 58%, #d5bd98 100%);
+  background: #f0f2f0;
 }
 
 .auth-board,
@@ -111,7 +108,7 @@ button:disabled {
   margin: 4px 0 0;
   color: var(--ink);
   font-family: Caveat, cursive;
-  font-size: clamp(40px, 7vw, 56px);
+  font-size: 40px;
   line-height: 0.95;
   text-wrap: balance;
 }
@@ -228,8 +225,8 @@ textarea:focus {
 
 .primary-action {
   color: #fff8e8;
-  background: linear-gradient(180deg, #67472d, var(--wood));
-  box-shadow: 0 12px 22px rgba(73, 48, 27, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  background: var(--wood);
+  box-shadow: none;
 }
 
 .primary-action.compact,

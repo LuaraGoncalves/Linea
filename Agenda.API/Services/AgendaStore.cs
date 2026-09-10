@@ -92,6 +92,12 @@ public sealed class AgendaStore
 
     public async Task EnsureTestUserAsync(TestUserOptions options)
     {
+        var validationMessage = _users.ValidateRegistration(options.Name, options.Email, options.Password);
+        if (validationMessage is not null)
+        {
+            throw new InvalidOperationException($"SeedTestUser: {validationMessage}");
+        }
+
         await _lock.WaitAsync();
         try
         {
@@ -102,9 +108,15 @@ public sealed class AgendaStore
                 await EnsureSchemaAsync();
                 await using var connection = await OpenConnectionAsync();
 
-                if (!await _userRepository.ExistsAsync(connection, normalizedEmail))
+                var existingUser = await _userRepository.GetByEmailAsync(connection, normalizedEmail);
+                if (existingUser is null)
                 {
                     await _userRepository.InsertAsync(connection, _users.CreateUser(options.Name, normalizedEmail, options.Password));
+                }
+                else if (_users.IsPasswordValid(existingUser, "123456"))
+                {
+                    var updatedUser = _users.WithPassword(existingUser, options.Password);
+                    await _userRepository.UpdatePasswordAsync(connection, updatedUser);
                 }
 
                 return;
@@ -112,8 +124,15 @@ public sealed class AgendaStore
 
             var data = await LoadAsync();
 
-            if (data.Users.Any(user => user.Email == normalizedEmail))
+            var existingIndex = data.Users.FindIndex(user => user.Email == normalizedEmail);
+            if (existingIndex >= 0)
             {
+                // Migrate only the old development password, preserving the account and notes.
+                if (_users.IsPasswordValid(data.Users[existingIndex], "123456"))
+                {
+                    data.Users[existingIndex] = _users.WithPassword(data.Users[existingIndex], options.Password);
+                    await SaveAsync(data);
+                }
                 return;
             }
 
