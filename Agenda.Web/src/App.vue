@@ -36,6 +36,8 @@ const notes = ref([])
 const selectedNoteId = ref(null)
 const authMode = ref('login')
 const loading = ref(false)
+const opening = ref(true)
+const openingError = ref('')
 const saving = ref(false)
 const deletingId = ref(null)
 const message = ref('')
@@ -99,6 +101,8 @@ const passwordValidationMessage = computed(() => {
 onMounted(() => {
   if (session.value) {
     loadNotes()
+  } else {
+    opening.value = false
   }
 })
 
@@ -137,14 +141,23 @@ async function loadNotes() {
 
   loading.value = true
   message.value = ''
+  opening.value = true
+  openingError.value = ''
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 60000)
 
   try {
-    notes.value = await listNotes(session.value.token)
+    notes.value = await listNotes(session.value.token, controller.signal)
     await nextTick()
     openFirstNoteReader()
   } catch (error) {
     handleRequestError(error)
+    if (session.value) {
+      openingError.value = 'Nao foi possivel abrir sua agenda agora. Tente novamente em instantes.'
+    }
   } finally {
+    clearTimeout(timeout)
+    opening.value = false
     loading.value = false
   }
 }
@@ -489,7 +502,20 @@ function validatePassword(password) {
 
 <template>
   <main class="app-shell">
-    <section v-if="!session" class="auth-board">
+    <section v-if="opening || (session && openingError)" class="opening-screen" :aria-busy="opening" aria-labelledby="opening-title">
+      <h1 id="opening-title">Linea</h1>
+      <p class="opening-tagline">coloque suas anotações em dia</p>
+      <div v-if="opening" class="opening-progress" role="status">
+        <span class="opening-orbit" aria-hidden="true"></span>
+        <span class="opening-status">Abrindo sua agenda...</span>
+      </div>
+      <div v-else class="opening-recovery">
+        <p class="message" role="alert">{{ openingError }}</p>
+        <button class="primary-action" type="button" @click="loadNotes">Tentar novamente</button>
+        <button class="ghost-action" type="button" @click="logout">Voltar para o login</button>
+      </div>
+    </section>
+    <section v-else-if="!session" class="auth-board">
       <div class="auth-paper">
         <p class="date-stamp">{{ new Date().toLocaleDateString('pt-BR') }}</p>
         <h1>Linea</h1>
