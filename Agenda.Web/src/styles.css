@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Nunito+Sans:wght@400;500;600;700;800&display=swap');
 
 @import './styles/base.css';
+@import './styles/opening.css';
 @import './styles/notebook.css';
 @import './styles/reader.css';
 @import './styles/responsive.css';

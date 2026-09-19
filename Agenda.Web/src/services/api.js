@@ -46,9 +46,10 @@ export async function login(payload) {
   })
 }
 
-export async function listNotes(token) {
+export async function listNotes(token, signal) {
   return request('/api/notes', {
-    token
+    token,
+    signal
   })
 }
 
@@ -95,6 +96,7 @@ async function request(url, options = {}) {
     response = await fetch(`${API_BASE_URL}${url}`, {
       method: options.method ?? 'GET',
       headers,
+      signal: options.signal,
       body: options.body ? JSON.stringify(options.body) : undefined
     })
   } catch {
