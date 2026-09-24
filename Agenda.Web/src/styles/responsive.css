@@ -1,139 +1,54 @@
+@media (max-width: 1100px) and (min-width: 901px) {
+  .page { padding: 22px; }
+  .note-actions { flex-direction: column; }
+}
+
+@media (min-width: 901px) and (max-height: 720px) {
+  .desk { align-content: start; }
+  .notebook { height: 680px; }
+}
 @media (max-width: 900px) {
-  .app-shell {
-    padding: 14px;
-  }
-
-  .auth-board,
-  .desk {
-    min-height: calc(100vh - 28px);
-  }
-
-  .topbar {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .topbar-status {
-    order: 3;
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .notebook {
-    grid-template-columns: 1fr;
-    height: auto;
-    min-height: auto;
-    gap: 14px;
-    background: transparent;
-    box-shadow: none;
-    overflow: visible;
-  }
-
-  .notebook::before {
-    display: none;
-  }
-
-  .auth-paper,
-  .page {
-    padding: 28px;
-  }
-
-  .page {
-    min-height: 560px;
-    border: 1px solid rgba(83, 56, 32, 0.18);
-    border-radius: 4px;
-    box-shadow: none;
-  }
-
-  .page-left,
-  .page-right {
-    border-radius: 4px;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-
-  .editor-page .note-form {
-    overflow: visible;
-    padding-right: 0;
-  }
-
-  .pinned-note {
-    width: 100%;
-    margin: 0 0 22px;
-    transform: none;
-  }
-
-  .notes-list {
-    max-height: 420px;
-  }
+  .app-shell { padding: 14px; }
+  .auth-board, .desk { min-height: calc(100svh - 28px); }
+  .desk { align-content: start; }
+  .topbar { flex-wrap: wrap; }
+  .topbar-status { order: 3; width: 100%; margin: 0; justify-content: flex-start; gap: 4px; }
+  .topbar > .icon-button { margin-left: auto; }
+  .notebook { display: block; height: auto; overflow: visible; }
+  .page { padding: 24px; overflow: visible; }
+  .page-right { border-left: 0; }
+  .notebook[data-mobile-view="list"] .editor-page,
+  .notebook[data-mobile-view="detail"] .list-page { display: none; }
+  .notes-list { max-height: none; overflow: visible; padding-right: 0; }
+  .back-to-list { display: inline-flex; align-self: flex-start; margin-bottom: 20px; }
+  .reader-sheet { flex: auto; grid-template-rows: auto auto minmax(260px, 1fr) auto auto; min-height: 560px; }
+  .editor-page .note-form { overflow: visible; padding: 3px; }
+  .form-actions { position: static; }
 }
-
 @media (max-width: 640px) {
-  .app-shell {
-    padding: 10px;
-  }
-
-  .topbar strong {
-    font-size: 28px;
-  }
-
-  .status-chip {
-    flex: 1 1 130px;
-    justify-content: center;
-  }
-
-  .auth-paper,
-  .page {
-    padding: 24px 20px;
-  }
-
-  .page {
-    min-height: 0;
-  }
-
-  .page-heading {
-    gap: 12px;
-  }
-
-  .page-heading h1,
-  .page-heading h2 {
-    font-size: 40px;
-  }
-
-  .note-card {
-    gap: 8px;
-    padding: 14px;
-  }
-
-  .reader-sheet {
-    min-height: 420px;
-    padding: 8px 0 0;
-  }
-
-  .reader-title-input {
-    font-size: 32px;
-  }
-
-  .reader-task-input {
-    font-size: 16px;
-  }
+  .app-shell { padding: 10px; }
+  .auth-board, .desk { min-height: calc(100svh - 20px); }
+  .auth-paper { padding: 26px 20px; }
+  .page { padding: 20px; }
+  .page-heading h1, .page-heading h2 { font-size: 20px; }
+  .topbar-status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; gap: 2px; }
+  .status-chip { flex-direction: column; gap: 3px; min-height: 52px; padding: 4px 2px; font-size: 11px; }
+  .note-filters { gap: 2px; }
+  .note-filters button { padding: 6px 8px; min-height: 44px; font-size: 12px; }
+  .note-actions { flex-direction: column; }
+  .note-card { padding: 10px; }
+  .reader-title-input { font-size: 30px; height: 78px; min-height: 78px; }
+  .reader-controls { gap: 4px; }
+  .reader-controls > span { min-width: 60px; }
+  .form-actions .save-status { width: 100%; }
+  .form-row { gap: 10px; }
+  .save-bar { padding: 10px 0; background: var(--page); }
+  .color-options { gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .reader-sheet.turning.turn-next,
-  .reader-sheet.turning.turn-previous {
-    animation: reader-soft-swap 220ms ease-out;
-  }
-
-  @keyframes reader-soft-swap {
-    0% {
-      opacity: 0.72;
-    }
-
-    100% {
-      opacity: 1;
-    }
-  }
+@media (max-width: 380px) {
+  .form-row { grid-template-columns: minmax(0, 1fr); }
 }

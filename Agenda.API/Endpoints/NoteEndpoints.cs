@@ -37,6 +37,17 @@ public static class NoteEndpoints
                 : Results.BadRequest(new { message = result.Message });
         });
 
+        group.MapPost("/import", async (HttpRequest request, ImportNoteRequest import, AgendaStore store, TokenService tokens) =>
+        {
+            var userId = tokens.GetUserId(request);
+            if (userId is null) return Results.Unauthorized();
+
+            var result = await store.ImportNoteAsync(userId.Value, import);
+            return result.Success
+                ? Results.Ok(result.Note)
+                : Results.BadRequest(new { message = result.Message });
+        });
+
         group.MapPut("/{id:guid}", async (HttpRequest request, Guid id, NoteRequest note, AgendaStore store, TokenService tokens) =>
         {
             var userId = tokens.GetUserId(request);

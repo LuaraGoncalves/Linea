@@ -43,6 +43,29 @@ public sealed class NoteRepository
         await command.ExecuteNonQueryAsync();
     }
 
+    public async Task<AgendaNote> ImportAsync(NpgsqlConnection connection, AgendaNote note)
+    {
+        await using var insert = new NpgsqlCommand(
+            """
+            insert into notes (id, user_id, title, body, note_date, note_time, color, is_completed, created_at, updated_at)
+            values (@id, @user_id, @title, @body, @note_date, @note_time, @color, @is_completed, @created_at, @updated_at)
+            on conflict (id) do nothing
+            """, connection);
+        AddNoteParameters(insert, note);
+        await insert.ExecuteNonQueryAsync();
+
+        await using var select = new NpgsqlCommand(
+            """
+            select id, user_id, title, body, note_date, note_time, color, is_completed, created_at, updated_at
+            from notes where id = @id and user_id = @user_id
+            """, connection);
+        select.Parameters.AddWithValue("id", note.Id);
+        select.Parameters.AddWithValue("user_id", note.UserId);
+        await using var reader = await select.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? ReadNote(reader)
+            : throw new InvalidOperationException("Nao foi possivel confirmar a importacao.");
+    }
+
     public async Task<AgendaNote?> UpdateAsync(
         NpgsqlConnection connection,
         Guid userId,
