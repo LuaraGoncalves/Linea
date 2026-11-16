@@ -4,11 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f0f2f0" />
+    <link rel="stylesheet" href="/src/styles/opening.css" />
+    <link rel="preload" href="/linea-notebook.svg" as="image" type="image/svg+xml" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&amp;family=Nunito+Sans:wght@400;500;600;700;800&amp;display=swap" media="print" onload="this.media='all'" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f0f2f0'/%3E%3Cpath d='M18 13h28a5 5 0 0 1 5 5v32a5 5 0 0 1-5 5H18a5 5 0 0 1-5-5V18a5 5 0 0 1 5-5Z' fill='%23fdfdfb' stroke='%23426456' stroke-width='3'/%3E%3Cpath d='M22 26h20M22 34h20M22 42h14' stroke='%23627c70' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M23 9v9M41 9v9' stroke='%23426456' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
     <title>Linea | Anotações</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <section class="opening-screen opening-screen--boot" aria-labelledby="opening-title">
+        <img class="opening-notebook" src="/linea-notebook.svg" width="200" height="160" alt="" aria-hidden="true" />
+        <h1 id="opening-title">Linea</h1>
+        <p class="opening-tagline">coloque suas anotações em dia</p>
+        <p class="opening-status" role="status">Abrindo sua agenda...</p>
+        <p class="opening-boot-help">Ainda não abriu? <a href="">Recarregar a página</a></p>
+      </section>
+    </div>
+    <noscript>
+      <style>.opening-screen--boot { display: none; }</style>
+      <p>Ative o JavaScript no navegador para abrir o Linea. Suas anotações não foram apagadas.</p>
+    </noscript>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

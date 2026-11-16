@@ -10,6 +10,7 @@ import {
   importLocalNote, login, register, saveSession, updateNote
 } from './services/api'
 import { createDraftStore, mergeDraft } from './services/drafts'
+import OpeningScreen from './components/OpeningScreen.vue'
 import { createLocalNoteStore, LOCAL_DRAFT_SCOPE, LOCAL_NOTES_KEY, normalizeLocalPayload } from './services/localNotes'
 
 const session = ref(getSavedSession())
@@ -326,6 +327,7 @@ async function submitAuth() {
   } catch (error) {
     if (controller.signal.aborted) return
     message.value = error.message
+    loading.value = false
     await nextTick()
     authError.value?.focus()
   } finally {
@@ -585,20 +587,17 @@ function normalizeNoteDate(date) { return date ? String(date).slice(0, 10) : nul
 
 <template>
   <main class="app-shell">
-    <section v-if="opening || openingError" class="opening-screen" :aria-busy="opening" aria-labelledby="opening-title">
-      <h1 id="opening-title">Linea</h1>
-      <p class="opening-tagline">coloque suas anotações em dia</p>
-      <div v-if="opening" class="opening-progress" role="status">
-        <span class="opening-orbit" aria-hidden="true"></span>
-        <span class="opening-status">{{ slowRequest ? 'Está demorando um pouco mais. Continuamos conectando...' : 'Abrindo sua agenda...' }}</span>
-      </div>
-      <div v-else class="opening-recovery">
-        <p class="message" role="alert">{{ openingError }}</p>
+    <OpeningScreen v-if="opening || openingError || (authOpen && loading)"
+      :loading="!openingError"
+      :error="openingError"
+      :status="slowRequest ? 'Ainda estamos conectando. Suas anotações estão preservadas.' : authOpen ? authMode === 'register' ? 'Criando sua conta...' : 'Entrando na sua conta...' : 'Abrindo sua agenda...'">
+      <template #recovery>
         <button class="primary-action" type="button" @click="session ? loadNotes() : loadLocalNotes()">Tentar novamente</button>
         <button v-if="!session" class="ghost-action" type="button" @click="openAuth">Entrar na conta</button>
-      </div>
+      </template>
+      <button v-if="authOpen" class="ghost-action" type="button" @click="closeAuth"><ArrowLeft :size="18" />Continuar sem conta</button>
       <button v-if="session" class="ghost-action" type="button" @click="logout()"><ArrowLeft :size="18" />Usar neste navegador</button>
-    </section>
+    </OpeningScreen>
 
     <section v-else-if="authOpen" class="auth-board">
       <div class="auth-paper">
