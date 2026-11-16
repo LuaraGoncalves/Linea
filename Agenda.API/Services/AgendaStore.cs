@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Agenda.API.Contracts;
 using Agenda.API.Data;
@@ -242,6 +244,39 @@ public sealed class AgendaStore
         {
             _lock.Release();
         }
+    }
+
+    public async Task<(bool Success, string Message, AgendaNote? Note)> ImportNoteAsync(Guid userId, ImportNoteRequest request)
+    {
+        if (request.LocalId == Guid.Empty || request.Note is null)
+            return (false, "Informe uma anotacao local valida.", null);
+
+        var validation = _notes.Validate(request.Note);
+        if (validation is not null) return (false, validation, null);
+
+        // A retry must return the same note, without overwriting edits already made in the account.
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"linea-import:{userId:D}:{request.LocalId:D}"));
+        var id = new Guid(hash.AsSpan(0, 16));
+        await _lock.WaitAsync();
+        try
+        {
+            var note = _notes.Create(userId, request.Note) with { Id = id };
+            if (UsesDatabase)
+            {
+                await EnsureSchemaAsync();
+                await using var connection = await OpenConnectionAsync();
+                var saved = await _noteRepository.ImportAsync(connection, note);
+                return (true, "Anotacao importada.", saved);
+            }
+
+            var data = await LoadAsync();
+            var existing = data.Notes.FirstOrDefault(item => item.Id == id && item.UserId == userId);
+            if (existing is not null) return (true, "Anotacao ja importada.", existing);
+            data.Notes.Add(note);
+            await SaveAsync(data);
+            return (true, "Anotacao importada.", note);
+        }
+        finally { _lock.Release(); }
     }
 
     public async Task<(bool Success, string Message, AgendaNote? Note)> UpdateNoteAsync(Guid userId, Guid id, NoteRequest request)

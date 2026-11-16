@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="160" viewBox="0 0 200 160" fill="none">
+  <style>
+    .leaf { transform-origin: 100px 80px; animation: turn 2.8s ease-in-out infinite; }
+    .leaf-two { animation-delay: -.22s; }
+    .leaf-three { animation-delay: -.44s; }
+    @keyframes turn {
+      0%, 18% { transform: scaleX(1); }
+      62%, 82% { transform: scaleX(-1); }
+      100% { transform: scaleX(1); }
+    }
+    @media (prefers-reduced-motion: reduce) { .leaf { animation: none; } }
+  </style>
+  <path d="M22 27Q60 19 100 31Q140 19 178 27V133Q139 125 100 137Q61 125 22 133Z" fill="#426456"/>
+  <path d="M30 33Q65 27 100 38V129Q65 118 30 124Z" fill="#edf2ed"/>
+  <path d="M170 33Q135 27 100 38V129Q135 118 170 124Z" fill="#fdfdfb"/>
+  <path d="M43 49Q64 46 84 52M43 63Q64 60 84 66M43 77Q64 74 84 80M43 91Q64 88 72 91M116 52Q136 46 157 49M116 66Q136 60 157 63M116 80Q136 74 157 77M116 94Q136 88 146 90" stroke="#a7b9ad" stroke-width="2" stroke-linecap="round"/>
+  <path d="M148 119V145L155 140L162 145V118" fill="#b87580"/>
+  <g class="leaf leaf-three">
+    <path d="M100 38Q135 27 170 33V124Q135 118 100 129Z" fill="#e3ebe5" stroke="#b7c8bb"/>
+  </g>
+  <g class="leaf leaf-two">
+    <path d="M100 38Q135 27 170 33V124Q135 118 100 129Z" fill="#f1f5f0" stroke="#c3d0c6"/>
+  </g>
+  <g class="leaf">
+    <path d="M100 38Q135 27 170 33V124Q135 118 100 129Z" fill="#fdfdfb" stroke="#d7dfda"/>
+    <path d="M116 52Q136 46 157 49M116 66Q136 60 157 63M116 80Q136 74 157 77M116 94Q136 88 146 90" stroke="#a7b9ad" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <path d="M100 38V129" stroke="#627c70" stroke-width="2"/>
+</svg>
